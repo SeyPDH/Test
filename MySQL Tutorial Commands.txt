@@ -1,0 +1,211 @@
+(pip install mysql-connector-python)
+
+mysql -h host -u user -pRoot menagerie
+SELECT NOW();
+SELECT VERSION(), CURRENT_DATE;
+SELECT USER();
+QUIT
+\C      /*TO CANCEL A QUERY YOU'RE IN/*
+SHOW DATABASES;
+USE WORLD
+CREATE DATABASE menagerie;
+SELECT DATABASE();#SHOWS CURRENTLY SELECTED DB
+SHOW TABLES;
+CREATE TABLE pet (name VARCHAR(20), owner VARCHAR(20),
+species VARCHAR(20), sex CHAR(1), birth DATE, death DATE);
+
+CREATE TABLE t1 (
+         i1 INT CHECK (i1 <> 0),      -- column constraint
+         i2 INT,
+         CHECK (i2 > i1),             -- table constraint
+         CHECK (i2 <> 0) NOT ENFORCED -- table constraint, not enforced
+       );
+
+DESCRIBE pet;#DESC FOR SHORT
+ALTER TABLE;
+
+LOAD DATA LOCAL INFILE '/path/pet.txt' INTO TABLE pet
+LINES TERMINATED BY '\r\n';
+https://dev.mysql.com/doc/refman/8.0/en/load-data-local-security.html
+
+SHOW INDEX FROM mydb.mytable
+SHOW CREATE TABLE tbl_name
+SHOW VARIABLES LIKE "secure_file_priv";
+load DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 9.3/Uploads/PET.TXT' INTO TABLE PET;
+INSERT INTO pet VALUES ('Puffball','Diane','hamster','f','1999-03-30',NULL);
+
+SELECT * FROM pet;
+UPDATE pet SET birth = '1989-08-31' WHERE name = 'Bowser';
+SELECT * FROM pet WHERE name = 'Bowser';
+SELECT * FROM pet WHERE birth >= '1998-1-1';
+SELECT * FROM pet WHERE species = 'dog' AND sex = 'f';
+SELECT * FROM pet WHERE species = 'snake' OR species = 'bird';
+SELECT * FROM pet WHERE (species = 'cat' AND sex = 'm')
+       OR (species = 'dog' AND sex = 'f');
+SELECT name, birth FROM pet;
+SELECT DISTINCT owner FROM pet;
+SELECT name, species, birth FROM pet
+       WHERE species = 'dog' OR species = 'cat';
+SELECT name, birth FROM pet ORDER BY birth DESC;
+SELECT name, species, birth FROM pet
+       ORDER BY species, birth DESC;
+SELECT name, birth, CURDATE(),
+       TIMESTAMPDIFF(YEAR,birth,CURDATE()) AS age
+       FROM pet ORDER BY name;
+SELECT name, birth, death,
+       TIMESTAMPDIFF(YEAR,birth,death) AS age
+       FROM pet WHERE death IS NOT NULL ORDER BY age;
+SELECT name, birth, MONTH(birth) FROM pet;
+SELECT name, birth FROM pet WHERE MONTH(birth) = 5;
+
+If you add a month to the value of CURDATE(), then extract the month part with MONTH(), the result produces the month in which to look for birthdays:
+SELECT name, birth FROM pet
+       WHERE MONTH(birth) = MONTH(DATE_ADD(CURDATE(),INTERVAL 1 MONTH)); #1=NEXT MONTH
+
+SQL pattern matching enables you to use _ to match any single character and % to match an arbitrary number of characters:
+SELECT * FROM pet WHERE name LIKE 'p%';
+SELECT * FROM pet WHERE name LIKE '%ly';
+SELECT * FROM pet WHERE name LIKE '%w%';
+SELECT * FROM pet WHERE name LIKE '_____'; #five underscores/letters
+Can also use extended RegExs:
+SELECT * FROM pet WHERE REGEXP_LIKE(name, '^b');
+SELECT * FROM pet WHERE REGEXP_LIKE(name, BINARY '^b');  #case-sensitive match
+SELECT * FROM pet WHERE REGEXP_LIKE(name, '^b', 'c');  #case-sensitive match
+SELECT * FROM pet WHERE REGEXP_LIKE(name, 'fy$'); # names ending...fy
+SELECT * FROM pet WHERE REGEXP_LIKE(name, 'w'); #names containing w
+SELECT * FROM pet WHERE REGEXP_LIKE(name, '^.....$'); names of 5 chars
+SELECT * FROM pet WHERE REGEXP_LIKE(name, '^.{5}$'); # {repeat n times operator}
+
+SELECT COUNT(*) FROM pet; # count rows
+SELECT owner, COUNT(*) FROM pet GROUP BY owner;
+SELECT species, COUNT(*) FROM pet GROUP BY species;
+SELECT sex, COUNT(*) FROM pet GROUP BY sex;
+SELECT species, sex, COUNT(*) FROM pet GROUP BY species, sex;
+SELECT species, sex, COUNT(*) FROM pet
+       WHERE species = 'dog' OR species = 'cat'
+       GROUP BY species, sex;
+SELECT species, sex, COUNT(*) FROM pet
+       WHERE sex IS NOT NULL
+       GROUP BY species, sex;
+
+MULTI-TABLES:
+
+CREATE TABLE event (name VARCHAR(20), date DATE,
+       type VARCHAR(15), remark VARCHAR(255));
+
+
+SELECT pet.name,
+       TIMESTAMPDIFF(YEAR,birth,date) AS age,
+       remark
+       FROM pet INNER JOIN event
+         ON pet.name = event.name
+       WHERE event.type = 'litter';
+
+
+#join a able to itself..
+SELECT p1.name, p1.sex, p2.name, p2.sex, p1.species, p2.species
+       FROM pet AS p1 INNER JOIN pet AS p2
+         ON p1.species = p2.species
+         AND p1.sex = 'f' AND p1.death IS NULL
+         AND p2.sex = 'm' AND p2.death IS NULL;
+
+CREATE TABLE shop (
+    article INT UNSIGNED  DEFAULT '0000' NOT NULL,
+    dealer  CHAR(20)      DEFAULT ''     NOT NULL,
+    price   DECIMAL(16,2) DEFAULT '0.00' NOT NULL,
+    PRIMARY KEY(article, dealer));
+INSERT INTO shop VALUES
+    (1,'A',3.45),(1,'B',3.99),(2,'A',10.99),(3,'B',1.45),
+    (3,'C',1.69),(3,'D',1.25),(4,'D',19.95);
+
+SELECT * FROM shop ORDER BY article;
+
+ “What is the highest item number?”
+
+SELECT MAX(article) AS article FROM shop;
+
+Find the number, dealer, and price of the most expensive article:
+This is easily done with a subquery:
+
+SELECT article, dealer, price
+FROM   shop
+WHERE  price=(SELECT MAX(price) FROM shop);
+
+Another solution is to use a LEFT JOIN, as shown here:
+
+SELECT s1.article, s1.dealer, s1.price
+FROM shop s1
+LEFT JOIN shop s2 ON s1.price < s2.price
+WHERE s2.article IS NULL;
+
+You can also do this by sorting all rows descending by price and get only the first row using the MySQL-specific LIMIT clause, like this:
+
+SELECT article, dealer, price
+FROM shop
+ORDER BY price DESC
+LIMIT 1;
+
+ Task: Find the highest price per article.
+
+SELECT article, MAX(price) AS price
+FROM   shop
+GROUP BY article
+ORDER BY article;
+
+For each article, find the dealer or dealers with the most expensive price:
+This problem can be solved with a subquery like this one:
+
+SELECT article, dealer, price
+FROM   shop s1
+WHERE  price=(SELECT MAX(s2.price)
+              FROM shop s2
+              WHERE s1.article = s2.article)
+ORDER BY article;
+
+Or, using a left join:
+
+SELECT s1.article, s1.dealer, s1.price
+FROM shop s1
+LEFT JOIN shop s2 ON s1.article = s2.article AND s1.price < s2.price
+WHERE s2.article IS NULL
+ORDER BY s1.article;
+
+to find rows in a table that have no counterpart in another table:
+
+SELECT left_tbl.*
+  FROM left_tbl LEFT JOIN right_tbl ON left_tbl.id = right_tbl.id
+  WHERE right_tbl.id IS NULL; #ie. NULL means no corresponding row in right_tbl)
+
+to find the articles with the highest and lowest price you can do this:
+
+SELECT @min_price:=MIN(price),@max_price:=MAX(price) FROM shop;
+SELECT * FROM shop WHERE price=@min_price OR price=@max_price;
+
+using keys:
+CREATE TABLE parent (
+    id INT NOT NULL AUTO_INCREMENT,
+    PRIMARY KEY (id)
+) ENGINE=INNODB;
+CREATE TABLE child (
+    id INT,
+    parent_id INT,
+    INDEX par_ind (parent_id),#INDEX FOR SEARCHING
+    FOREIGN KEY (parent_id)
+        REFERENCES parent(id)
+        ON UPDATE CASCADE	#automatically deletes or updates matching rows in the child table 
+        ON DELETE CASCADE	#when deleting or updating rows in the parent table. REFERENTIAL ACTIONS.
+) ENGINE=INNODB;
+
+use the bit group functions to calculate the number of days per month a user has visited a Web page:
+
+CREATE TABLE t1 (year YEAR, month INT UNSIGNED,
+             day INT UNSIGNED);
+INSERT INTO t1 VALUES(2000,1,1),(2000,1,20),(2000,1,30),(2000,2,2),
+            (2000,2,23),(2000,2,23);
+SELECT year,month,BIT_COUNT(BIT_OR(1<<day)) AS days FROM t1
+       GROUP BY year,month;
+
+much simpler is:
+select year, month, COUNT(DISTINCT day) from t1 group by year, month;
+
+
